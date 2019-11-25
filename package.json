@@ -1,0 +1,32 @@
+{
+  "name": "@intouchgroup/redirect-tester",
+  "version": "1.0.0",
+  "description": "CLI for batch testing URL redirects",
+  "main": "cli.js",
+  "bin": {
+    "redirect-tester": "cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intouchgroup/redirect-tester.git"
+  },
+  "keywords": [
+    "redirect test",
+    "tester",
+    "checker"
+  ],
+  "author": "Intouch Group",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "12.12.7",
+    "typescript": "3.7.2"
+  },
+  "dependencies": {
+    "chalk": "3.0.0",
+    "commander": "4.0.1",
+    "excel4node": "1.7.2"
+  }
+}
