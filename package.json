@@ -1,6 +1,6 @@
 {
   "name": "@intouchgroup/redirect-tester",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "CLI for batch testing URL redirects",
   "main": "cli.js",
   "bin": {
