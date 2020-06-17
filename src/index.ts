@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
-const program = require('commander');
+import program from 'commander';
 import { randomFillSync } from 'crypto';
 import { green, red, yellow, cyan, magenta, white } from 'chalk';
 import * as http from 'http';
 import * as https from 'https';
+import * as path from 'path';
 import * as filesystem from 'fs';
+import * as excel4node from 'excel4node';
+import * as exceljs from 'exceljs';
 
 type InputURLData = {inputIndex: number, inputURL: string}
 type RequestData = {guid: string, url: string}
@@ -31,6 +34,7 @@ const report: (ProcessedURLData & {
 let didError = false;
 
 program
+    .option('-i, --input <filepath,worksheetName,cellValue>', 'Path to XLSX spreadsheet input file, the name of the worksheet, and the text in the URL table header')
     .option('-s, --sites <urls>', 'Comma-delimited list of URLs to check redirects', (string: string) => string.split(','), [])
     .option('-t, --targets <urls>', 'Comma-delimited list of target URLs to compare to final redirect URLs', (string: string) => string.split(','), [])
     .option('-c, --codes <codes>', 'Comma-delimited list of target status codes to compare to final redirect status codes', (string: string) => string.split(','), [])
@@ -44,8 +48,23 @@ program
     .parse(process.argv);
 
 const log = {
+    failedToParseInput: () => {
+        console.error(red(`\n    ERROR: Could not parse input file option (-i or --input), please check the format:\n    ${magenta('redirect-tester -i filepath,worksheetName,cellValue')}\n    ${magenta('redirect-tester -i "reports/Input-File.xlsx,Page-to-Page Redirects,Current/Old URL"')}\n`));
+    },
     missingInputURLs: () => {
         console.error(red(`\n    ERROR: No site URLs were given.\n    Please make sure to include URLs with -s or --sites: ${magenta('redirect-tester -s google.com,facebook.com')}\n`));
+    },
+    exclusiveOptions: () => {
+        console.error(red(`\n    ERROR: Cannot use both filepath input (-i or --input) and site URLs (-s or --sites).\n    Please choose one.\n`));
+    },
+    missingInputFile: (filepath: string) => {
+        console.error(red(`\n    ERROR: Cannot locate file at input filepath: ${magenta(filepath)}.\n`));
+    },
+    missingWorksheet: (worksheetName: string) => {
+        console.error(red(`\n    ERROR: Cannot find Excel worksheet by name: ${magenta(worksheetName)}.\n`));
+    },
+    cannotFindCell: (cellValue: string) => {
+        console.error(red(`\n    ERROR: Cannot locate cell in Excel worksheet with value: ${magenta(cellValue)}.\n`));
     },
     inputAndTargetURLsLengthMismatched: () => {
         console.error(red(`\n    ERROR: The number of input URLs and target URLs (sites and targets) did not match.\n    If you use targets, the list of targets must be the same length as the list of sites.\n    To skip a target for a specific site, just leave an empty spot in the target list.\n    For example, to skip providing a target for facebook.com:\n    ${magenta('redirect-tester -s google.com,facebook.com,intouchsol.com -t http://www.google.com,,http://www.intouchsol.com')}\n`));
@@ -300,13 +319,12 @@ const generateReportFilename = (fileExtension: string) => {
 };
 
 const createExcelWorkbook = (usedTargetURLs: boolean, usedTargetCodes: boolean, prefix?: string, protocol?: string, auth?: string) => {
-    const xl = require('excel4node');
-    const workBook = new xl.Workbook();
-    const workSheet = workBook.addWorksheet('Sheet 1');
-    const headerStyle = workBook.createStyle({ fill: { type: 'pattern', patternType: 'solid', fgColor: '#5595D0' }, font: { color: '#FAFAFA', size: 16, bold: true } });
-    const asideStyle = workBook.createStyle({ font: { color: '#030308', size: 16, bold: true }, alignment: { horizontal: 'right' } });
-    const valueStyle = workBook.createStyle({ font: { color: '#030308', size: 12 } });
-    const textWrapStyle = workBook.createStyle({ alignment: { wrapText: true } });
+    const workbook = new excel4node.Workbook();
+    const worksheet = workbook.addWorksheet('Sheet 1');
+    const headerStyle = workbook.createStyle({ fill: { type: 'pattern', patternType: 'solid', fgColor: '#5595D0' }, font: { color: '#FAFAFA', size: 16, bold: true } });
+    const asideStyle = workbook.createStyle({ font: { color: '#030308', size: 16, bold: true }, alignment: { horizontal: 'right' } });
+    const valueStyle = workbook.createStyle({ font: { color: '#030308', size: 12 } });
+    const textWrapStyle = workbook.createStyle({ alignment: { wrapText: true } });
 
     const headerStartRow = 6;
 
@@ -325,58 +343,58 @@ const createExcelWorkbook = (usedTargetURLs: boolean, usedTargetCodes: boolean, 
     ];
 
     headerTitlesAndWidths.forEach(([ string, width ], index) => {
-        workSheet.cell(headerStartRow, index + 1).string(string).style(headerStyle);
-        workSheet.column(index + 1).setWidth(width);
+        worksheet.cell(headerStartRow, index + 1).string(string).style(headerStyle);
+        worksheet.column(index + 1).setWidth(width);
     });
 
-    workSheet.cell(1, 2).string('Checked URL Count:').style(asideStyle);
-    workSheet.cell(1, 3).string(String(report.length)).style(valueStyle);
+    worksheet.cell(1, 2).string('Checked URL Count:').style(asideStyle);
+    worksheet.cell(1, 3).string(String(report.length)).style(valueStyle);
 
-    workSheet.cell(2, 2).string('Used Target URLs:').style(asideStyle);
-    workSheet.cell(2, 3).string(String(usedTargetURLs)).style(valueStyle);
+    worksheet.cell(2, 2).string('Used Target URLs:').style(asideStyle);
+    worksheet.cell(2, 3).string(String(usedTargetURLs)).style(valueStyle);
 
-    workSheet.cell(3, 2).string('Used Target Codes:').style(asideStyle);
-    workSheet.cell(3, 3).string(String(usedTargetCodes)).style(valueStyle);
+    worksheet.cell(3, 2).string('Used Target Codes:').style(asideStyle);
+    worksheet.cell(3, 3).string(String(usedTargetCodes)).style(valueStyle);
 
-    workSheet.cell(1, 4).string('Used Auth:').style(asideStyle);
-    workSheet.cell(1, 5).string(auth ? 'true' : 'false').style(valueStyle);
+    worksheet.cell(1, 4).string('Used Auth:').style(asideStyle);
+    worksheet.cell(1, 5).string(auth ? 'true' : 'false').style(valueStyle);
 
-    workSheet.cell(2, 4).string('Prefix:').style(asideStyle);
-    workSheet.cell(2, 5).string(prefix ? prefix : '').style(valueStyle);
+    worksheet.cell(2, 4).string('Prefix:').style(asideStyle);
+    worksheet.cell(2, 5).string(prefix ? prefix : '').style(valueStyle);
 
-    workSheet.cell(3, 4).string('Protocol:').style(asideStyle);
-    workSheet.cell(3, 5).string(protocol ? protocol : '').style(valueStyle);
+    worksheet.cell(3, 4).string('Protocol:').style(asideStyle);
+    worksheet.cell(3, 5).string(protocol ? protocol : '').style(valueStyle);
 
     const headersLength = headerTitlesAndWidths.length;
 
     report.forEach(({inputIndex, url, targetURL, targetURLMatched, finalURL, targetRedirectStatusCode, targetStatusMatched, finalStatusCode, finalRedirectStatusCode, numberOfRedirects, inputURL, responses}, index) => {
         const rowNumber = index + 1 + headerStartRow;
-        workSheet.row(rowNumber).setHeight(60);
-        workSheet.cell(rowNumber, 1).string(String(inputIndex + 1)).style(valueStyle);
-        workSheet.cell(rowNumber, 2).string(url).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 3).string(String(targetURL !== undefined ? targetURL : '')).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 4).string(String(targetURLMatched !== undefined ? targetURLMatched : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 5).string(String(finalURL)).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 6).string(String(targetRedirectStatusCode !== undefined ? targetRedirectStatusCode : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 7).string(String(targetStatusMatched !== undefined ? targetStatusMatched : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 8).string(String(finalRedirectStatusCode)).style(valueStyle);
-        workSheet.cell(rowNumber, 9).string(String(finalStatusCode)).style(valueStyle);
-        workSheet.cell(rowNumber, 10).string(String(numberOfRedirects)).style(valueStyle);
-        workSheet.cell(rowNumber, 11).string(inputURL).style(valueStyle).style(textWrapStyle);
+        worksheet.row(rowNumber).setHeight(60);
+        worksheet.cell(rowNumber, 1).string(String(inputIndex + 1)).style(valueStyle);
+        worksheet.cell(rowNumber, 2).string(url).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 3).string(String(targetURL !== undefined ? targetURL : '')).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 4).string(String(targetURLMatched !== undefined ? targetURLMatched : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 5).string(String(finalURL)).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 6).string(String(targetRedirectStatusCode !== undefined ? targetRedirectStatusCode : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 7).string(String(targetStatusMatched !== undefined ? targetStatusMatched : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 8).string(String(finalRedirectStatusCode)).style(valueStyle);
+        worksheet.cell(rowNumber, 9).string(String(finalStatusCode)).style(valueStyle);
+        worksheet.cell(rowNumber, 10).string(String(numberOfRedirects)).style(valueStyle);
+        worksheet.cell(rowNumber, 11).string(inputURL).style(valueStyle).style(textWrapStyle);
         
         responses.forEach(({ statusCode, location }, index) => {
             const responseNumber = index + 1;
             const columnNumber = headersLength - 1 + (responseNumber * 2);
-            workSheet.column(columnNumber).setWidth(25);
-            workSheet.column(columnNumber + 1).setWidth(40);
-            workSheet.cell(headerStartRow, columnNumber).string(`Response ${responseNumber} Status`).style(headerStyle);
-            workSheet.cell(rowNumber, columnNumber).string(String(statusCode ? statusCode : '')).style(valueStyle);
-            workSheet.cell(headerStartRow, columnNumber + 1).string(`Response ${responseNumber} Location`).style(headerStyle);
-            workSheet.cell(rowNumber, columnNumber + 1).string(location ? location : '').style(valueStyle).style(textWrapStyle);
+            worksheet.column(columnNumber).setWidth(25);
+            worksheet.column(columnNumber + 1).setWidth(40);
+            worksheet.cell(headerStartRow, columnNumber).string(`Response ${responseNumber} Status`).style(headerStyle);
+            worksheet.cell(rowNumber, columnNumber).string(String(statusCode ? statusCode : '')).style(valueStyle);
+            worksheet.cell(headerStartRow, columnNumber + 1).string(`Response ${responseNumber} Location`).style(headerStyle);
+            worksheet.cell(rowNumber, columnNumber + 1).string(location ? location : '').style(valueStyle).style(textWrapStyle);
         });
     });
 
-    return workBook;
+    return workbook;
 };
 
 const writeToDisk = (
@@ -412,9 +430,9 @@ const writeToDisk = (
     }
     if (xlsx) {
         try {
-            const workBook = createExcelWorkbook(usedTargetURLs, usedTargetCodes, prefix, protocol, auth);
+            const workbook = createExcelWorkbook(usedTargetURLs, usedTargetCodes, prefix, protocol, auth);
             const xlsxFilename = filename ? `${filename}.xlsx` : generateReportFilename('xlsx');
-            workBook.write(xlsxFilename);
+            workbook.write(xlsxFilename);
             xlsxFilenames.push(xlsxFilename);
         }
         catch (error) {
@@ -425,13 +443,80 @@ const writeToDisk = (
     log.wroteToDisk(jsonFilenames, xlsxFilenames, json, xlsx);
 };
 
+const extractURLsFromSpreadsheet = async (
+    filepath: string,
+    worksheetName: string,
+    cellValue: string,
+) => {
+    filepath = path.resolve(filepath);
+
+    if (!filesystem.existsSync(filepath)) {
+        log.missingInputFile(filepath);
+        process.exit(1);
+    }
+
+    const workbook = new exceljs.Workbook();
+    await workbook.xlsx.readFile(filepath);
+
+    const worksheet = workbook.getWorksheet(worksheetName);
+
+    if (!worksheet) {
+        log.missingWorksheet(worksheetName);
+        process.exit(1);
+    }
+
+    let doCollectData = false;
+    const data: { [key: string]: string[] } = {
+        inputURLs: [],
+        inputTargetURLs: [],
+        codes: [],
+    };
+
+    worksheet.eachRow((row, rowNumber) => {
+        if (doCollectData) {
+            if (!row.getCell(1).text) {
+                doCollectData = false;
+                return;
+            }
+
+            data.inputURLs.push(row.getCell(1).text);
+            data.inputTargetURLs.push(row.getCell(2).text);
+            data.codes.push(row.getCell(3).text);
+        }
+        if (row.getCell(1).text === cellValue) {
+            doCollectData = true;
+        }
+    });
+
+    if (data)
+};
+
 const init = async () => {
-    const { sites: inputURLs, targets: inputTargetURLs, codes: inputTargetRedirectStatusCodes, prefix, protocol, auth, concurrent, json, xlsx, filename } = program;
+    let { input, sites: inputURLs, targets: inputTargetURLs, codes: inputTargetRedirectStatusCodes } = program;
+    const { prefix, protocol, auth, concurrent, json, xlsx, filename } = program;
+    const [ inputFilepath, inputWorksheetName, cellValue ] = input ? input.split(',') : [];
     const [ username, password ] = auth ? auth.split(':') : [];
 
-    if (inputURLs.length === 0) {
+    if (input && (!inputFilepath || !inputWorksheetName || !cellValue)) {
+        log.failedToParseInput();
+        process.exit(1);
+    }
+
+    if (!inputFilepath && inputURLs.length === 0) {
         log.missingInputURLs();
         process.exit(1);
+    }
+
+    if (inputFilepath && inputURLs.length) {
+        log.exclusiveOptions();
+        process.exit(1);
+    }
+
+    if (inputFilepath) {
+        const fileData = await extractURLsFromSpreadsheet(inputFilepath, inputWorksheetName, cellValue);
+        // inputURLs = fileData.inputURLs;
+        // inputTargetURLs = fileData.inputTargetURLs;
+        // inputTargetRedirectStatusCodes = fileData.codes;
     }
 
     if (auth && (!username || !password)) {

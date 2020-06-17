@@ -40,6 +40,7 @@ A full list of available arguments with examples is presented below.
 | Short name   | Long name          | What it does                                                                      |
 |--------------|--------------------|-----------------------------------------------------------------------------------|
 |  `-h`        |  `--help`          |  Shows all available arguments                                                    |
+|  `-i`        |  `--input`         |  Excel input filepath and worksheet options                                       |
 |  `-s`        |  `--sites`         |  Comma-separated list of URLs to test                                             |
 |  `-t`        |  `--targets`       |  Comma-separated list of URLs to compare against final redirect URL               |
 |  `-c`        |  `--codes`         |  Comma-separated list of status codes to compare against final redirect status    |
@@ -90,7 +91,13 @@ A full list of available arguments with examples is presented below.
 
 > Tests private.intouchsol.com with authentication
 
-<br><br>7. Use short or long names for arguments. These commands are exactly equivalent:
+<br><br>7. Using Excel file for URL inputs, value should be in the format `filepath,worksheetName,cellValue`:
+
+`redirect-tester -i "reports/Input-File.xlsx,Page-to-Page Redirects,Current/Old URL"`
+
+> Tests the URLs found in the XLSX file, in the worksheet with the specified name, under the cell with the specified value
+
+<br><br>8. Use short or long names for arguments. These commands are exactly equivalent:
 
 `redirect-tester -s intouchsol.com -x -r "http://" -f "MyBestReportYet"`
 
