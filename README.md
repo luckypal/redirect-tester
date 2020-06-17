@@ -52,6 +52,8 @@ A full list of available arguments with examples is presented below.
 |  `-x`        |  `--xlsx`          |  Generate XLSX report                                                             |
 |  `-f`        |  `--filename`      |  Manually set the name of the generated report                                    |
 
+Note: When using the `-i` or `--input` option, the tool expects the input URLs, target URLs, and target status codes to be in the first, second, and third columns respectively. You must provide the Excel filepath, the worksheet name, and the value of the cell directly above the first input URL. If an input URL is missing the protocol or host, the tool will attempt to construct a valid input URL using the protocol and host of the target URL.
+
 
 ### Examples
 

@@ -63,6 +63,12 @@ const log = {
     missingWorksheet: (worksheetName: string) => {
         console.error(red(`\n    ERROR: Cannot find Excel worksheet by name: ${magenta(worksheetName)}.\n`));
     },
+    missingFileInputURLs: (worksheetName: string) => {
+        console.error(red(`\n    ERROR: Cannot find site URLs in Excel worksheet named: ${magenta(worksheetName)}.\n`));
+    },
+    failedToParseFileURLs: (inputURL: string, index: number) => {
+        console.error(red(`\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: ${magenta(`${index + 1}. ${inputURL}`)}.\n`));
+    },
     cannotFindCell: (cellValue: string) => {
         console.error(red(`\n    ERROR: Cannot locate cell in Excel worksheet with value: ${magenta(cellValue)}.\n`));
     },
@@ -287,7 +293,17 @@ const recursivelyCheckRedirectsAndUpdateReport = async (requests: RequestData[],
     const redirects = results.filter(({ statusCode, location }) => statusCode && location && statusCode >= 300 && statusCode < 400);
 
     if (redirects.length) {
-        const nextRequests = redirects.map(({ guid, location }) => ({ guid, url: location as string }));
+        const nextRequests = redirects.map(({ guid, location }, index) => {
+            let url = null;
+            try {
+                url = new URL(location!);
+            }
+            catch (error) {
+                const requestUrl = new URL(requests[index].url);
+                url = new URL(requestUrl.protocol + '//' + requestUrl.host + location!);
+            }
+            return { guid, url: url.toString() };
+        });
         await recursivelyCheckRedirectsAndUpdateReport(nextRequests, numberOfConcurrentRequests, auth);
     }
 };
@@ -488,7 +504,24 @@ const extractURLsFromSpreadsheet = async (
         }
     });
 
-    if (data)
+    if (!data.inputURLs.length) {
+        log.missingFileInputURLs(worksheetName);
+        process.exit(1);
+    }
+
+    data.inputURLs.forEach((inputURL, index) => {
+        if (!URL_VALIDATION_REGEX.test(inputURL)) {
+            if (!data.inputTargetURLs[index]) {
+                log.failedToParseFileURLs(inputURL, index);
+                process.exit(1);
+            }
+            
+            const targetURL = new URL(data.inputTargetURLs[index]);
+            data.inputURLs[index] = targetURL.protocol + '//' + targetURL.host + inputURL;
+        }
+    });
+
+    return data;
 };
 
 const init = async () => {
@@ -514,9 +547,9 @@ const init = async () => {
 
     if (inputFilepath) {
         const fileData = await extractURLsFromSpreadsheet(inputFilepath, inputWorksheetName, cellValue);
-        // inputURLs = fileData.inputURLs;
-        // inputTargetURLs = fileData.inputTargetURLs;
-        // inputTargetRedirectStatusCodes = fileData.codes;
+        inputURLs = fileData.inputURLs;
+        inputTargetURLs = fileData.inputTargetURLs;
+        inputTargetRedirectStatusCodes = fileData.codes;
     }
 
     if (auth && (!username || !password)) {
