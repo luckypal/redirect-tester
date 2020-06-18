@@ -58,19 +58,19 @@ const log = {
         console.error(red(`\n    ERROR: Cannot use both filepath input (-i or --input) and site URLs (-s or --sites).\n    Please choose one.\n`));
     },
     missingInputFile: (filepath: string) => {
-        console.error(red(`\n    ERROR: Cannot locate file at input filepath: ${magenta(filepath)}.\n`));
+        console.error(red(`\n    ERROR: Cannot locate file at input filepath: ${magenta(filepath)}\n`));
     },
     missingWorksheet: (worksheetName: string) => {
-        console.error(red(`\n    ERROR: Cannot find Excel worksheet by name: ${magenta(worksheetName)}.\n`));
+        console.error(red(`\n    ERROR: Cannot find Excel worksheet by name: ${magenta(worksheetName)}\n`));
     },
     missingFileInputURLs: (worksheetName: string) => {
-        console.error(red(`\n    ERROR: Cannot find site URLs in Excel worksheet named: ${magenta(worksheetName)}.\n`));
+        console.error(red(`\n    ERROR: Cannot find site URLs in Excel worksheet named: ${magenta(worksheetName)}\n`));
     },
     failedToParseFileURLs: (inputURL: string, index: number) => {
-        console.error(red(`\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: ${magenta(`${index + 1}. ${inputURL}`)}.\n`));
+        console.error(red(`\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: ${magenta(`${index + 1}. ${inputURL}`)}\n`));
     },
     cannotFindCell: (cellValue: string) => {
-        console.error(red(`\n    ERROR: Cannot locate cell in Excel worksheet with value: ${magenta(cellValue)}.\n`));
+        console.error(red(`\n    ERROR: Cannot locate cell in Excel worksheet with value: ${magenta(cellValue)}\n`));
     },
     inputAndTargetURLsLengthMismatched: () => {
         console.error(red(`\n    ERROR: The number of input URLs and target URLs (sites and targets) did not match.\n    If you use targets, the list of targets must be the same length as the list of sites.\n    To skip a target for a specific site, just leave an empty spot in the target list.\n    For example, to skip providing a target for facebook.com:\n    ${magenta('redirect-tester -s google.com,facebook.com,intouchsol.com -t http://www.google.com,,http://www.intouchsol.com')}\n`));

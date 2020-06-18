@@ -122,19 +122,19 @@ var log = {
         console.error(chalk_1.red("\n    ERROR: Cannot use both filepath input (-i or --input) and site URLs (-s or --sites).\n    Please choose one.\n"));
     },
     missingInputFile: function (filepath) {
-        console.error(chalk_1.red("\n    ERROR: Cannot locate file at input filepath: " + chalk_1.magenta(filepath) + ".\n"));
+        console.error(chalk_1.red("\n    ERROR: Cannot locate file at input filepath: " + chalk_1.magenta(filepath) + "\n"));
     },
     missingWorksheet: function (worksheetName) {
-        console.error(chalk_1.red("\n    ERROR: Cannot find Excel worksheet by name: " + chalk_1.magenta(worksheetName) + ".\n"));
+        console.error(chalk_1.red("\n    ERROR: Cannot find Excel worksheet by name: " + chalk_1.magenta(worksheetName) + "\n"));
     },
     missingFileInputURLs: function (worksheetName) {
-        console.error(chalk_1.red("\n    ERROR: Cannot find site URLs in Excel worksheet named: " + chalk_1.magenta(worksheetName) + ".\n"));
+        console.error(chalk_1.red("\n    ERROR: Cannot find site URLs in Excel worksheet named: " + chalk_1.magenta(worksheetName) + "\n"));
     },
     failedToParseFileURLs: function (inputURL, index) {
-        console.error(chalk_1.red("\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: " + chalk_1.magenta(index + 1 + ". " + inputURL) + ".\n"));
+        console.error(chalk_1.red("\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: " + chalk_1.magenta(index + 1 + ". " + inputURL) + "\n"));
     },
     cannotFindCell: function (cellValue) {
-        console.error(chalk_1.red("\n    ERROR: Cannot locate cell in Excel worksheet with value: " + chalk_1.magenta(cellValue) + ".\n"));
+        console.error(chalk_1.red("\n    ERROR: Cannot locate cell in Excel worksheet with value: " + chalk_1.magenta(cellValue) + "\n"));
     },
     inputAndTargetURLsLengthMismatched: function () {
         console.error(chalk_1.red("\n    ERROR: The number of input URLs and target URLs (sites and targets) did not match.\n    If you use targets, the list of targets must be the same length as the list of sites.\n    To skip a target for a specific site, just leave an empty spot in the target list.\n    For example, to skip providing a target for facebook.com:\n    " + chalk_1.magenta('redirect-tester -s google.com,facebook.com,intouchsol.com -t http://www.google.com,,http://www.intouchsol.com') + "\n"));
