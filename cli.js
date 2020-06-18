@@ -11,6 +11,25 @@ var __assign = (this && this.__assign) || function () {
     };
     return __assign.apply(this, arguments);
 };
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -58,13 +77,19 @@ var __rest = (this && this.__rest) || function (s, e) {
         }
     return t;
 };
-exports.__esModule = true;
-var program = require('commander');
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+var commander_1 = __importDefault(require("commander"));
 var crypto_1 = require("crypto");
 var chalk_1 = require("chalk");
-var http = require("http");
-var https = require("https");
-var filesystem = require("fs");
+var http = __importStar(require("http"));
+var https = __importStar(require("https"));
+var path = __importStar(require("path"));
+var filesystem = __importStar(require("fs"));
+var excel4node = __importStar(require("excel4node"));
+var exceljs = __importStar(require("exceljs"));
 var CONCURRENT_REQUESTS_DEFAULT = 5;
 var REPORT_FILENAME_SUFFIX_DEFAULT = 'redirects';
 var USER_AGENT_DEFAULT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.70 Safari/537.36';
@@ -73,7 +98,8 @@ var URL_HTTPS_PROTOCOL_REGEX = /^https:\/\//;
 var URL_VALIDATION_REGEX = /^((?:f|ht)tps?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/;
 var report = [];
 var didError = false;
-program
+commander_1.default
+    .option('-i, --input <filepath,worksheetName,cellValue>', 'Path to XLSX spreadsheet input file, the name of the worksheet, and the text in the URL table header')
     .option('-s, --sites <urls>', 'Comma-delimited list of URLs to check redirects', function (string) { return string.split(','); }, [])
     .option('-t, --targets <urls>', 'Comma-delimited list of target URLs to compare to final redirect URLs', function (string) { return string.split(','); }, [])
     .option('-c, --codes <codes>', 'Comma-delimited list of target status codes to compare to final redirect status codes', function (string) { return string.split(','); }, [])
@@ -86,8 +112,29 @@ program
     .option('-f, --filename <filename>', 'Set the name of the generated report file')
     .parse(process.argv);
 var log = {
+    failedToParseInput: function () {
+        console.error(chalk_1.red("\n    ERROR: Could not parse input file option (-i or --input), please check the format:\n    " + chalk_1.magenta('redirect-tester -i filepath,worksheetName,cellValue') + "\n    " + chalk_1.magenta('redirect-tester -i "reports/Input-File.xlsx,Page-to-Page Redirects,Current/Old URL"') + "\n"));
+    },
     missingInputURLs: function () {
         console.error(chalk_1.red("\n    ERROR: No site URLs were given.\n    Please make sure to include URLs with -s or --sites: " + chalk_1.magenta('redirect-tester -s google.com,facebook.com') + "\n"));
+    },
+    exclusiveOptions: function () {
+        console.error(chalk_1.red("\n    ERROR: Cannot use both filepath input (-i or --input) and site URLs (-s or --sites).\n    Please choose one.\n"));
+    },
+    missingInputFile: function (filepath) {
+        console.error(chalk_1.red("\n    ERROR: Cannot locate file at input filepath: " + chalk_1.magenta(filepath) + ".\n"));
+    },
+    missingWorksheet: function (worksheetName) {
+        console.error(chalk_1.red("\n    ERROR: Cannot find Excel worksheet by name: " + chalk_1.magenta(worksheetName) + ".\n"));
+    },
+    missingFileInputURLs: function (worksheetName) {
+        console.error(chalk_1.red("\n    ERROR: Cannot find site URLs in Excel worksheet named: " + chalk_1.magenta(worksheetName) + ".\n"));
+    },
+    failedToParseFileURLs: function (inputURL, index) {
+        console.error(chalk_1.red("\n    ERROR: Failed to construct valid site URL due to missing target URL for input URL: " + chalk_1.magenta(index + 1 + ". " + inputURL) + ".\n"));
+    },
+    cannotFindCell: function (cellValue) {
+        console.error(chalk_1.red("\n    ERROR: Cannot locate cell in Excel worksheet with value: " + chalk_1.magenta(cellValue) + ".\n"));
     },
     inputAndTargetURLsLengthMismatched: function () {
         console.error(chalk_1.red("\n    ERROR: The number of input URLs and target URLs (sites and targets) did not match.\n    If you use targets, the list of targets must be the same length as the list of sites.\n    To skip a target for a specific site, just leave an empty spot in the target list.\n    For example, to skip providing a target for facebook.com:\n    " + chalk_1.magenta('redirect-tester -s google.com,facebook.com,intouchsol.com -t http://www.google.com,,http://www.intouchsol.com') + "\n"));
@@ -162,7 +209,7 @@ var log = {
     },
     programDidError: function () {
         console.error(chalk_1.red('\n    ERROR: At least one error occurred while the tool was running.\n    However, the report was able to be completed.\n    Please review the console for any error messages.\n'));
-    }
+    },
 };
 var validateURLs = function (inputURLs) {
     var validURLs = [];
@@ -211,7 +258,7 @@ var creatInitialReport = function (validURLs, targetURLs, targetRedirectStatusCo
             inputIndex: inputIndex,
             targetURL: targetURL,
             targetRedirectStatusCode: targetRedirectStatusCode,
-            responses: []
+            responses: [],
         };
     });
     if (missingPrefixURLs.length > 0 && !prefix) {
@@ -239,7 +286,7 @@ var performBatchAsyncRequests = function (requests, auth) {
                         protocolAdapter_1.get(url, {
                             headers: {
                                 'User-Agent': USER_AGENT_DEFAULT,
-                                'Authorization': 'Basic ' + Buffer.from(auth).toString('base64')
+                                'Authorization': 'Basic ' + Buffer.from(auth).toString('base64'),
                             }
                         }, function (_a) {
                             var statusCode = _a.statusCode, headers = _a.headers;
@@ -267,19 +314,19 @@ var batchCheckRedirects = function (requests, numberOfConcurrentRequests, auth) 
                 _i = 0, requestChunks_1 = requestChunks;
                 _c.label = 1;
             case 1:
-                if (!(_i < requestChunks_1.length)) return [3 /*break*/, 4];
+                if (!(_i < requestChunks_1.length)) return [3, 4];
                 chunk_1 = requestChunks_1[_i];
                 _b = (_a = chunkedResults).push;
-                return [4 /*yield*/, performBatchAsyncRequests(chunk_1, auth)];
+                return [4, performBatchAsyncRequests(chunk_1, auth)];
             case 2:
                 _b.apply(_a, [_c.sent()]);
                 _c.label = 3;
             case 3:
                 _i++;
-                return [3 /*break*/, 1];
+                return [3, 1];
             case 4:
                 results = chunkedResults.reduce(function (accumulator, value) { return accumulator.concat(value); }, []);
-                return [2 /*return*/, results];
+                return [2, results];
         }
     });
 }); };
@@ -304,7 +351,7 @@ var recursivelyCheckRedirectsAndUpdateReport = function (requests, numberOfConcu
     var results, redirects, nextRequests;
     return __generator(this, function (_a) {
         switch (_a.label) {
-            case 0: return [4 /*yield*/, batchCheckRedirects(requests, numberOfConcurrentRequests, auth)];
+            case 0: return [4, batchCheckRedirects(requests, numberOfConcurrentRequests, auth)];
             case 1:
                 results = _a.sent();
                 updateReport(results);
@@ -312,16 +359,24 @@ var recursivelyCheckRedirectsAndUpdateReport = function (requests, numberOfConcu
                     var statusCode = _a.statusCode, location = _a.location;
                     return statusCode && location && statusCode >= 300 && statusCode < 400;
                 });
-                if (!redirects.length) return [3 /*break*/, 3];
-                nextRequests = redirects.map(function (_a) {
+                if (!redirects.length) return [3, 3];
+                nextRequests = redirects.map(function (_a, index) {
                     var guid = _a.guid, location = _a.location;
-                    return ({ guid: guid, url: location });
+                    var url = null;
+                    try {
+                        url = new URL(location);
+                    }
+                    catch (error) {
+                        var requestUrl = new URL(requests[index].url);
+                        url = new URL(requestUrl.protocol + '//' + requestUrl.host + location);
+                    }
+                    return { guid: guid, url: url.toString() };
                 });
-                return [4 /*yield*/, recursivelyCheckRedirectsAndUpdateReport(nextRequests, numberOfConcurrentRequests, auth)];
+                return [4, recursivelyCheckRedirectsAndUpdateReport(nextRequests, numberOfConcurrentRequests, auth)];
             case 2:
                 _a.sent();
                 _a.label = 3;
-            case 3: return [2 /*return*/];
+            case 3: return [2];
         }
     });
 }); };
@@ -352,13 +407,12 @@ var generateReportFilename = function (fileExtension) {
     return timestamp + "_" + REPORT_FILENAME_SUFFIX_DEFAULT + "." + fileExtension;
 };
 var createExcelWorkbook = function (usedTargetURLs, usedTargetCodes, prefix, protocol, auth) {
-    var xl = require('excel4node');
-    var workBook = new xl.Workbook();
-    var workSheet = workBook.addWorksheet('Sheet 1');
-    var headerStyle = workBook.createStyle({ fill: { type: 'pattern', patternType: 'solid', fgColor: '#5595D0' }, font: { color: '#FAFAFA', size: 16, bold: true } });
-    var asideStyle = workBook.createStyle({ font: { color: '#030308', size: 16, bold: true }, alignment: { horizontal: 'right' } });
-    var valueStyle = workBook.createStyle({ font: { color: '#030308', size: 12 } });
-    var textWrapStyle = workBook.createStyle({ alignment: { wrapText: true } });
+    var workbook = new excel4node.Workbook();
+    var worksheet = workbook.addWorksheet('Sheet 1');
+    var headerStyle = workbook.createStyle({ fill: { type: 'pattern', patternType: 'solid', fgColor: '#5595D0' }, font: { color: '#FAFAFA', size: 16, bold: true } });
+    var asideStyle = workbook.createStyle({ font: { color: '#030308', size: 16, bold: true }, alignment: { horizontal: 'right' } });
+    var valueStyle = workbook.createStyle({ font: { color: '#030308', size: 12 } });
+    var textWrapStyle = workbook.createStyle({ alignment: { wrapText: true } });
     var headerStartRow = 6;
     var headerTitlesAndWidths = [
         ['#', 6],
@@ -375,50 +429,50 @@ var createExcelWorkbook = function (usedTargetURLs, usedTargetCodes, prefix, pro
     ];
     headerTitlesAndWidths.forEach(function (_a, index) {
         var string = _a[0], width = _a[1];
-        workSheet.cell(headerStartRow, index + 1).string(string).style(headerStyle);
-        workSheet.column(index + 1).setWidth(width);
+        worksheet.cell(headerStartRow, index + 1).string(string).style(headerStyle);
+        worksheet.column(index + 1).setWidth(width);
     });
-    workSheet.cell(1, 2).string('Checked URL Count:').style(asideStyle);
-    workSheet.cell(1, 3).string(String(report.length)).style(valueStyle);
-    workSheet.cell(2, 2).string('Used Target URLs:').style(asideStyle);
-    workSheet.cell(2, 3).string(String(usedTargetURLs)).style(valueStyle);
-    workSheet.cell(3, 2).string('Used Target Codes:').style(asideStyle);
-    workSheet.cell(3, 3).string(String(usedTargetCodes)).style(valueStyle);
-    workSheet.cell(1, 4).string('Used Auth:').style(asideStyle);
-    workSheet.cell(1, 5).string(auth ? 'true' : 'false').style(valueStyle);
-    workSheet.cell(2, 4).string('Prefix:').style(asideStyle);
-    workSheet.cell(2, 5).string(prefix ? prefix : '').style(valueStyle);
-    workSheet.cell(3, 4).string('Protocol:').style(asideStyle);
-    workSheet.cell(3, 5).string(protocol ? protocol : '').style(valueStyle);
+    worksheet.cell(1, 2).string('Checked URL Count:').style(asideStyle);
+    worksheet.cell(1, 3).string(String(report.length)).style(valueStyle);
+    worksheet.cell(2, 2).string('Used Target URLs:').style(asideStyle);
+    worksheet.cell(2, 3).string(String(usedTargetURLs)).style(valueStyle);
+    worksheet.cell(3, 2).string('Used Target Codes:').style(asideStyle);
+    worksheet.cell(3, 3).string(String(usedTargetCodes)).style(valueStyle);
+    worksheet.cell(1, 4).string('Used Auth:').style(asideStyle);
+    worksheet.cell(1, 5).string(auth ? 'true' : 'false').style(valueStyle);
+    worksheet.cell(2, 4).string('Prefix:').style(asideStyle);
+    worksheet.cell(2, 5).string(prefix ? prefix : '').style(valueStyle);
+    worksheet.cell(3, 4).string('Protocol:').style(asideStyle);
+    worksheet.cell(3, 5).string(protocol ? protocol : '').style(valueStyle);
     var headersLength = headerTitlesAndWidths.length;
     report.forEach(function (_a, index) {
         var inputIndex = _a.inputIndex, url = _a.url, targetURL = _a.targetURL, targetURLMatched = _a.targetURLMatched, finalURL = _a.finalURL, targetRedirectStatusCode = _a.targetRedirectStatusCode, targetStatusMatched = _a.targetStatusMatched, finalStatusCode = _a.finalStatusCode, finalRedirectStatusCode = _a.finalRedirectStatusCode, numberOfRedirects = _a.numberOfRedirects, inputURL = _a.inputURL, responses = _a.responses;
         var rowNumber = index + 1 + headerStartRow;
-        workSheet.row(rowNumber).setHeight(60);
-        workSheet.cell(rowNumber, 1).string(String(inputIndex + 1)).style(valueStyle);
-        workSheet.cell(rowNumber, 2).string(url).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 3).string(String(targetURL !== undefined ? targetURL : '')).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 4).string(String(targetURLMatched !== undefined ? targetURLMatched : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 5).string(String(finalURL)).style(valueStyle).style(textWrapStyle);
-        workSheet.cell(rowNumber, 6).string(String(targetRedirectStatusCode !== undefined ? targetRedirectStatusCode : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 7).string(String(targetStatusMatched !== undefined ? targetStatusMatched : '')).style(valueStyle);
-        workSheet.cell(rowNumber, 8).string(String(finalRedirectStatusCode)).style(valueStyle);
-        workSheet.cell(rowNumber, 9).string(String(finalStatusCode)).style(valueStyle);
-        workSheet.cell(rowNumber, 10).string(String(numberOfRedirects)).style(valueStyle);
-        workSheet.cell(rowNumber, 11).string(inputURL).style(valueStyle).style(textWrapStyle);
+        worksheet.row(rowNumber).setHeight(60);
+        worksheet.cell(rowNumber, 1).string(String(inputIndex + 1)).style(valueStyle);
+        worksheet.cell(rowNumber, 2).string(url).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 3).string(String(targetURL !== undefined ? targetURL : '')).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 4).string(String(targetURLMatched !== undefined ? targetURLMatched : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 5).string(String(finalURL)).style(valueStyle).style(textWrapStyle);
+        worksheet.cell(rowNumber, 6).string(String(targetRedirectStatusCode !== undefined ? targetRedirectStatusCode : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 7).string(String(targetStatusMatched !== undefined ? targetStatusMatched : '')).style(valueStyle);
+        worksheet.cell(rowNumber, 8).string(String(finalRedirectStatusCode)).style(valueStyle);
+        worksheet.cell(rowNumber, 9).string(String(finalStatusCode)).style(valueStyle);
+        worksheet.cell(rowNumber, 10).string(String(numberOfRedirects)).style(valueStyle);
+        worksheet.cell(rowNumber, 11).string(inputURL).style(valueStyle).style(textWrapStyle);
         responses.forEach(function (_a, index) {
             var statusCode = _a.statusCode, location = _a.location;
             var responseNumber = index + 1;
             var columnNumber = headersLength - 1 + (responseNumber * 2);
-            workSheet.column(columnNumber).setWidth(25);
-            workSheet.column(columnNumber + 1).setWidth(40);
-            workSheet.cell(headerStartRow, columnNumber).string("Response " + responseNumber + " Status").style(headerStyle);
-            workSheet.cell(rowNumber, columnNumber).string(String(statusCode ? statusCode : '')).style(valueStyle);
-            workSheet.cell(headerStartRow, columnNumber + 1).string("Response " + responseNumber + " Location").style(headerStyle);
-            workSheet.cell(rowNumber, columnNumber + 1).string(location ? location : '').style(valueStyle).style(textWrapStyle);
+            worksheet.column(columnNumber).setWidth(25);
+            worksheet.column(columnNumber + 1).setWidth(40);
+            worksheet.cell(headerStartRow, columnNumber).string("Response " + responseNumber + " Status").style(headerStyle);
+            worksheet.cell(rowNumber, columnNumber).string(String(statusCode ? statusCode : '')).style(valueStyle);
+            worksheet.cell(headerStartRow, columnNumber + 1).string("Response " + responseNumber + " Location").style(headerStyle);
+            worksheet.cell(rowNumber, columnNumber + 1).string(location ? location : '').style(valueStyle).style(textWrapStyle);
         });
     });
-    return workBook;
+    return workbook;
 };
 var writeToDisk = function (usedTargetURLs, usedTargetCodes, json, xlsx, prefix, protocol, auth, filename) {
     log.writingToDisk(json, xlsx);
@@ -430,7 +484,7 @@ var writeToDisk = function (usedTargetURLs, usedTargetCodes, json, xlsx, prefix,
                 prefix: prefix ? prefix : '',
                 protocol: protocol ? protocol : '',
                 auth: auth ? true : false,
-                report: report
+                report: report,
             };
             var jsonFilename = filename ? filename + ".json" : generateReportFilename('json');
             filesystem.writeFile(jsonFilename, JSON.stringify(jsonReport), 'utf8', function (error) { return error ? log.errorWritingToDisk(error, true) : undefined; });
@@ -442,9 +496,9 @@ var writeToDisk = function (usedTargetURLs, usedTargetCodes, json, xlsx, prefix,
     }
     if (xlsx) {
         try {
-            var workBook = createExcelWorkbook(usedTargetURLs, usedTargetCodes, prefix, protocol, auth);
+            var workbook = createExcelWorkbook(usedTargetURLs, usedTargetCodes, prefix, protocol, auth);
             var xlsxFilename = filename ? filename + ".xlsx" : generateReportFilename('xlsx');
-            workBook.write(xlsxFilename);
+            workbook.write(xlsxFilename);
             xlsxFilenames.push(xlsxFilename);
         }
         catch (error) {
@@ -453,17 +507,93 @@ var writeToDisk = function (usedTargetURLs, usedTargetCodes, json, xlsx, prefix,
     }
     log.wroteToDisk(jsonFilenames, xlsxFilenames, json, xlsx);
 };
-var init = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var inputURLs, inputTargetURLs, inputTargetRedirectStatusCodes, prefix, protocol, auth, concurrent, json, xlsx, filename, _a, username, password, targetRedirectStatusCodes, validURLs, initialRequests, concurrentNumber;
-    return __generator(this, function (_b) {
-        switch (_b.label) {
+var extractURLsFromSpreadsheet = function (filepath, worksheetName, cellValue) { return __awaiter(void 0, void 0, void 0, function () {
+    var workbook, worksheet, doCollectData, data;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
             case 0:
-                inputURLs = program.sites, inputTargetURLs = program.targets, inputTargetRedirectStatusCodes = program.codes, prefix = program.prefix, protocol = program.protocol, auth = program.auth, concurrent = program.concurrent, json = program.json, xlsx = program.xlsx, filename = program.filename;
-                _a = auth ? auth.split(':') : [], username = _a[0], password = _a[1];
-                if (inputURLs.length === 0) {
+                filepath = path.resolve(filepath);
+                if (!filesystem.existsSync(filepath)) {
+                    log.missingInputFile(filepath);
+                    process.exit(1);
+                }
+                workbook = new exceljs.Workbook();
+                return [4, workbook.xlsx.readFile(filepath)];
+            case 1:
+                _a.sent();
+                worksheet = workbook.getWorksheet(worksheetName);
+                if (!worksheet) {
+                    log.missingWorksheet(worksheetName);
+                    process.exit(1);
+                }
+                doCollectData = false;
+                data = {
+                    inputURLs: [],
+                    inputTargetURLs: [],
+                    codes: [],
+                };
+                worksheet.eachRow(function (row, rowNumber) {
+                    if (doCollectData) {
+                        if (!row.getCell(1).text) {
+                            doCollectData = false;
+                            return;
+                        }
+                        data.inputURLs.push(row.getCell(1).text);
+                        data.inputTargetURLs.push(row.getCell(2).text);
+                        data.codes.push(row.getCell(3).text);
+                    }
+                    if (row.getCell(1).text === cellValue) {
+                        doCollectData = true;
+                    }
+                });
+                if (!data.inputURLs.length) {
+                    log.missingFileInputURLs(worksheetName);
+                    process.exit(1);
+                }
+                data.inputURLs.forEach(function (inputURL, index) {
+                    if (!URL_VALIDATION_REGEX.test(inputURL)) {
+                        if (!data.inputTargetURLs[index]) {
+                            log.failedToParseFileURLs(inputURL, index);
+                            process.exit(1);
+                        }
+                        var targetURL = new URL(data.inputTargetURLs[index]);
+                        data.inputURLs[index] = targetURL.protocol + '//' + targetURL.host + inputURL;
+                    }
+                });
+                return [2, data];
+        }
+    });
+}); };
+var init = function () { return __awaiter(void 0, void 0, void 0, function () {
+    var input, inputURLs, inputTargetURLs, inputTargetRedirectStatusCodes, prefix, protocol, auth, concurrent, json, xlsx, filename, _a, inputFilepath, inputWorksheetName, cellValue, _b, username, password, fileData, targetRedirectStatusCodes, validURLs, initialRequests, concurrentNumber;
+    return __generator(this, function (_c) {
+        switch (_c.label) {
+            case 0:
+                input = commander_1.default.input, inputURLs = commander_1.default.sites, inputTargetURLs = commander_1.default.targets, inputTargetRedirectStatusCodes = commander_1.default.codes;
+                prefix = commander_1.default.prefix, protocol = commander_1.default.protocol, auth = commander_1.default.auth, concurrent = commander_1.default.concurrent, json = commander_1.default.json, xlsx = commander_1.default.xlsx, filename = commander_1.default.filename;
+                _a = input ? input.split(',') : [], inputFilepath = _a[0], inputWorksheetName = _a[1], cellValue = _a[2];
+                _b = auth ? auth.split(':') : [], username = _b[0], password = _b[1];
+                if (input && (!inputFilepath || !inputWorksheetName || !cellValue)) {
+                    log.failedToParseInput();
+                    process.exit(1);
+                }
+                if (!inputFilepath && inputURLs.length === 0) {
                     log.missingInputURLs();
                     process.exit(1);
                 }
+                if (inputFilepath && inputURLs.length) {
+                    log.exclusiveOptions();
+                    process.exit(1);
+                }
+                if (!inputFilepath) return [3, 2];
+                return [4, extractURLsFromSpreadsheet(inputFilepath, inputWorksheetName, cellValue)];
+            case 1:
+                fileData = _c.sent();
+                inputURLs = fileData.inputURLs;
+                inputTargetURLs = fileData.inputTargetURLs;
+                inputTargetRedirectStatusCodes = fileData.codes;
+                _c.label = 2;
+            case 2:
                 if (auth && (!username || !password)) {
                     log.failedToParseAuth();
                     process.exit(1);
@@ -491,15 +621,15 @@ var init = function () { return __awaiter(void 0, void 0, void 0, function () {
                     return ({ guid: guid, url: url });
                 });
                 concurrentNumber = concurrent ? parseInt(concurrent) : CONCURRENT_REQUESTS_DEFAULT;
-                return [4 /*yield*/, recursivelyCheckRedirectsAndUpdateReport(initialRequests, concurrentNumber, auth)];
-            case 1:
-                _b.sent();
+                return [4, recursivelyCheckRedirectsAndUpdateReport(initialRequests, concurrentNumber, auth)];
+            case 3:
+                _c.sent();
                 finalizeReport();
                 writeToDisk(Boolean(inputTargetURLs.length), Boolean(inputTargetRedirectStatusCodes.length), json, xlsx, prefix, protocol, auth, filename);
                 if (didError) {
                     log.programDidError();
                 }
-                return [2 /*return*/];
+                return [2];
         }
     });
 }); };
